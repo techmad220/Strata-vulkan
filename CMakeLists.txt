@@ -840,6 +840,23 @@ if(STRATA_NATIVE_EXPERTS)
     if(NOT strata_llamacpp_POPULATED)
       FetchContent_Populate(strata_llamacpp)
     endif()
+    if(STRATA_ENABLE_VULKAN)
+      # Pinned ggml commit relies on transitive <functional> inclusion on MSVC.
+      # Portable Clang/MinGW correctly exposes that omission; patch the pinned
+      # source deterministically before adding ggml rather than depending on
+      # toolchain-specific header leakage.
+      set(_strata_vk_types "${strata_llamacpp_SOURCE_DIR}/ggml/src/ggml-vulkan/ggml-vulkan-types.h")
+      if(NOT EXISTS "${_strata_vk_types}")
+        message(FATAL_ERROR "pinned ggml Vulkan header missing: ${_strata_vk_types}")
+      endif()
+      file(READ "${_strata_vk_types}" _strata_vk_types_text)
+      if(NOT _strata_vk_types_text MATCHES "#include <functional>")
+        string(REPLACE "#include <vulkan/vulkan_core.h>"
+                       "#include <vulkan/vulkan_core.h>\n#include <functional>"
+                       _strata_vk_types_text "${_strata_vk_types_text}")
+        file(WRITE "${_strata_vk_types}" "${_strata_vk_types_text}")
+      endif()
+    endif()
     add_subdirectory(${strata_llamacpp_SOURCE_DIR}/ggml ${CMAKE_BINARY_DIR}/ggml EXCLUDE_FROM_ALL)
   endif()
   # part of strata_kernels_cpu (the pool calls these and they call its CPU probe: one library, so GNU ld's
